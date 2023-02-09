@@ -128,7 +128,7 @@ q="$1"
         then ((ds++))
             match "$file" "$q" &
             cd "$file" 2> /dev/null || continue
-displaypath
+displayfile
 			[[ "$Subs" -ge "$MaxSubs" ]] && {
 				#echo "max subs reached, waiting"
 				wait
