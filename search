@@ -1,197 +1,117 @@
-#!/bin/bash
+#!/bin/python3
 
-[[ "$debug" == 1 ]] && set -x
-[[ "$COLUMNS" == '' ]] && { COLUMNS="$(tput cols)" || Optp= ;}
-# echo "cols:$COLUMNS"
+# import
+import sys
+import os
+from pydoc import pager
 
-#PATH=''
-
-function usage {
-while read useline
-do echo "$useline"
-done <<'DOC'
-usage: $0 [-dp] [-h|--help]
--h | show help
--P | dont show current searching path
--d | search files and directories starting with .
--p | pipe output to PAGER
--f | faster search (by using subprocesses)
--r | use regex patterns in input string
--s | max subprocesses per process. only applies with -f
--F | search in files instead of filenames
-DOC
-exit 0
-}
-
-[[ "$@" == *"--help"* ]] && usage
-((MaxSubs=4))
-while getopts ":dpPhfrs:F" ARG
-do
-	case "${ARG}" in
-		h ) usage;;
-		d ) pattern=".[^.]* $pattern";;
-		P ) Optp=;;
-		p ) Optpager=;;
-		f ) Optf='&'; echo "fast mode '$Optf'";Optp= ; export Optf Optp;;
-		r ) Optr='regex';;
-		s ) MaxSubs="$OPTARG";;
-		F ) echo "currently broken..."; exit 1; OptF='&';;
-	esac
-done
-shift $((OPTIND-1))
-q="$@"
-
-until [[ "$cnt" -ge $(($COLUMNS-3)) ]]
-do whiteline="${whiteline} ";((cnt++))
-done
-unset cnt
-function clline {
-	#echo -ne "$whiteline\r"
-	printf " %.0s" $(eval "echo {1..$(($COLUMNS-1))}")
-	echo -ne "\r"
-}
-
-function displayfile {
-	clline
-	path="$(pwd)"
-	file="$path"
-	[[ -v Optp ]] || echo -ne "${path:0:$COLUMNS}\r"
-}
-
-function error {
-    echo ''
-    printf "=%.0s" $(eval "echo {1..$COLUMNS}") && echo ''
-    echo "error: $1"
-	echo "waiting for subprocesses if present"
-	wait
-	echo "done"
-    [[ "$1" == interrupt ]] && exit 0
-    exit 1
-}
-NL="$(echo '')"
-if [[ -v Optr ]]
-then echo "using regex mode"
-function match {
-	if [[ "$1" == $2 ]]
-	then
-        clline
-		if [[ -v Optpager ]]
-		then plist="$plist\n$(pwd)$file"
-		else echo -e "\r\e[30;47mmatch:\e[0m $(pwd)/$1"
-		fi
-		((found++))
-     fi
-}
-elif [[ -v OptF ]]
-then
-function match {
-	cnt=0
-	while read line
-	do ((cnt++))
-		if [[ "$line" == *"$2"* ]]
-		then
-			clline
-			if [[ -v Optpager ]]
-			then plist="$plist\n$(pwd)$file@$cnt"
-			else echo -e "\r\e[30;47mmatch:\e[0m $(pwd)/$1@$cnt"
-			fi
-			((found++))
-		fi
-	done
-}
-else
-function match {
-	if [[ "$1" == *"$2"* ]]
-	then
-        clline
-		if [[ -v Optpager ]]
-		then plist="$plist\n$(pwd)$file"
-		else echo -e "\r\e[30;47mmatch:\e[0m $(pwd)/$1"
-		fi
-		((found++))
-     fi
-}
-fi
-
-((es=0));((ds=0));((fs=0));((found=0))
-
-function search {
-q="$1"
-    for file in * $pattern
-    do
-	if [[ -L "$file" ]]
-	then continue
-        elif [[ -f "$file" ]]
-        then ((fs++))
-			match "$file" "$q" &
-        elif [[ -d "$file" ]]
-        then ((ds++))
-            match "$file" "$q" &
-            cd "$file" 2> /dev/null || continue
-displayfile
-			[[ "$Subs" -ge "$MaxSubs" ]] && {
-				#echo "max subs reached, waiting"
-				wait
-				((Subs=0))
-				#echo "done"
-			}
-			((Subs++))
-			eval "search $q $Optf"
-            cd ..
-        else
-            match "$file" "$q" &
-        fi
-        #echo -ne "\033[[0k\r"
-    done
-	wait
-}
-
-trap "error interrupt" SIGINT
-
-# set title
-[[ -v Optf ]] && status+=("fast mode")
-echo -ne "\033]0;$q: search by vosje (${status[@]})\007" # xterm and most other
+# colorama
+while True:
+        try:
+            from colorama import Fore, Back, Style
+        except ModuleNotFoundError:
+            print("installing colorama using pip.")
+            os.system("pip install colorama")
+        else:
+            break
 
 
-echo -e "searching for $q:"
-[[ -v Optpager ]] || {
-echo -ne "\n\e[30;47m"
-printf "=%.0s" $(eval "echo {1..$COLUMNS}")
-echo -e "\e[0m\n"
-}
+# termsize
+cols,lines=os.get_terminal_size()
+# print(cols,"x",lines)
 
-search $1
+# args
+import argparse
+parser=argparse.ArgumentParser(
+                    prog=sys.argv[0],
+                    description = 'search your files',
+                    epilog = '🔍🔎')
 
-# echo -ne "\033[[0k\r"
-wait
-status+=("done")
-command -v "notify-send" >/dev/null && notify-send "search by vosje" "search for $q in $(pwd): done.\nstatus: ${status[@]}\ntty: $(tty)\nresults: $results" >/dev/null 2&>1
-command -v "termux-toast" >/dev/null && termux-toast "search for $q done" && termux-toast "results: $results" >/dev/null 2&>1
+parser.add_argument('query',help="the query to search")
 
-clline
-[[ -v Optpager ]] || {
-echo -e "\e[30;47m"
-printf "=%.0s" $(eval "echo {1..$COLUMNS}") && echo -e "\e[0m"
-}
-if [[ -v Optf ]]
-then echo "stats are disabled becouse of fast mode"
-else echo -e "\n\e[30;47msearched\e[0m\n$ds folders,\n$fs files,\n$es unknown,\n\e[30;47mfound\e[0m\n$found results."
-fi
-echo -e "\e[30;47mdone\e[0m"
-[[ -v Optpager ]] && {
-	[[ ! -v PAGER || "$PAGER" == '' ]] || ! command -v "$PAGER" > /dev/null && {
-		if command -v less > /dev/null
-		then PAGER=less
-		elif command -v more > /dev/null
-		then PAGER=more
-		elif command -v cat > /dev/null
-		then PAGER=cat
-		else echo -e "\e[1;31mno pager found. export the PAGER variable containing the path to your pager to use this feature.\e[0m"; echo -e "\e[30;47mhere are your results:\e[0m\n$plist"; exit 1
-		fi
-	}
-	[[ -v PAGER ]] && echo -e "$plist" | $PAGER
-}
+parser.add_argument('-t','--threads',help="the maximum treads",type=int,metavar='N',default=3)
+parser.add_argument('-p','--pager',help="pipe output to a pager",action='store_true')
+parser.add_argument('-D','--no-dir',action='store_true',help="don't show current directory when searching")
+
+arg=parser.parse_args()
 
 
-[[ "$debug" == 1 ]] && set +x
+clstr=" " * cols
+def clline():
+    print(clstr,end='')
+    print("\r",end='')
 
+if arg.pager:
+    global results
+    results="results:"
+    def match(mc):
+        global results, rc
+        if arg.query in mc:
+            results=f"{results}\n{mc}"
+            rc=rc+1
+else:
+    def match(mc):
+        global rc
+        if arg.query in mc:
+            print(Back.WHITE+Fore.BLACK+"match:"+Style.RESET_ALL,os.getcwd()+'/'+mc)
+            rc=rc+1
+#
+
+
+if arg.no_dir:
+    print('nodir on')
+    def path():
+        pass
+else:
+    def path():
+        path=os.getcwd()
+        clline()
+        print(path[0:cols-1]+"\r",end='')
+#
+
+def _s():
+    tasks=0
+    for f in os.listdir():
+        if os.path.isfile(f): # file
+            match(f)
+        elif os.path.islink(f):
+            match(f)
+        elif os.path.isdir(f): # dir
+            match(f)
+            #
+            os.chdir(f)
+            path()
+            s()
+            path()
+            os.chdir("..")
+    # await asyncio.wait([proc])
+#
+def s():
+    try:
+        _s()
+    except RecursionError:
+        clline()
+        print("\rmax subdirectory level of",sys.getrecursionlimit(),"reached.","This won't stop me, but i cant search deeper than here.")
+        path()
+    except KeyboardInterrupt:
+        clline()
+        print("\rinterrupted by user. stopping.\n")
+        sys.exit(0)
+    except Exception as e:
+        clline()
+        print("unknown exception:",str(e))
+
+global rc
+rc=0
+
+print("searching for",arg.query,"...")
+if not arg.pager:
+    print(Back.WHITE+Fore.BLACK+"=" * cols+Style.RESET_ALL+"\n")
+s()
+if not arg.pager:
+    clline()
+    print("\n"+Back.WHITE+Fore.BLACK+"=" * cols+Style.RESET_ALL)
+print("done\nfound",rc,"results")
+
+if arg.pager:
+    pager(results)
