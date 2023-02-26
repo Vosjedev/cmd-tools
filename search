@@ -47,7 +47,8 @@ if arg.pager:
     def match(mc):
         global results, rc
         if arg.query in mc:
-            results=f"{results}\n{mc}"
+            p=os.getcwd()
+            results=f"{results}\n{p}/{mc}"
             rc=rc+1
 else:
     def match(mc):
