@@ -20,12 +20,13 @@ function syntax {
 }
 
 quiet=false
-while getopts ":hqa:o:" arg;do
+while getopts ":Hhqa:o:" arg;do
     case $arg in
         h ) syntax 0;;
         q ) quiet=true;;
         a ) opts="$OPTARG";;
         o ) outfile="-o '$OPTARG'";;
+        H ) axel --help; exit 0;;
         * ) syntax 1
     esac
 done
