@@ -1,0 +1,74 @@
+#!/bin/bash
+
+for dep in axel cut bc zsh tput
+do command -v "$dep" >/dev/null 2>&1 || { echo "dependency $dep not found. please make the command available in the PATH by installing it/changing the path/moving the binary to a place in the path."; exit 255; }
+done
+
+trap "tput cnorm; exit 130" SIGINT
+
+function syntax {
+    exit="$1"
+    [[ "$1" == '' ]] && exit=1
+    echo -e "usage: $0 [-h] [-q] [-a opts] url\n"\
+        "-h      : display this\n"\
+        "-q      : dont show axel output except progress bar\n"\
+        "        : (if you dont want the progress bar, call axel, not me.)\n"\
+        "-a opts : pass arguments directly to axel."\
+        "-o file : saves output to file"
+    exit "$exit"
+}
+
+quiet=false
+while getopts ":hqa:o:" arg;do
+    case $arg in
+        h ) syntax 0;;
+        q ) quiet=true;;
+        a ) opts="$OPTARG";;
+        o ) outfile="-o '$OPTARG'";;
+        * ) syntax 1
+    esac
+done
+shift $((OPTIND-1))
+
+if [[ "$1" == "--" ]]; then url="$2"; else url="$1"; fi
+
+if [[ "$url" == '' ]]
+then syntax 1
+fi
+
+# outfile="-o '${outfile[-1]}'"
+
+# # echo "url: $url; quiet: $quiet; help: $help"
+# # echo "axel opts: '$opts'"
+
+tput civis
+opts="${opts[*]}"
+eval "( axel $opts $outfile $url; )" | {
+    while read -r line; do
+        pers="$(echo "$line" | cut -d ']' -f '1' -s | cut -c '3-4')"
+        # echo "$line:::$pers"
+        #[[ "$line" == "[  0%] "*" ["*"KB/s]"* ]] && pers="0"
+        pers="${pers// /}"
+        if [[ "$pers" =~ ^[0-9]+$ ]]
+        then [[ "$pers" == 00 ]] && pers=100
+            cols=$(($(tput cols)-6))
+            echo -n "$pers% "
+            ch="$(echo "$(($cols))*($pers/100)" | bc -l | cut -d . -f 1)"
+            # echo "$cols="
+            # echo "$ch-"
+            # echo "$(($cols-$ch-1))"
+            eval "printf '#%.0s' {1..$ch}"
+            eval "printf '=%.0s' {1..$(($cols-$ch))}"
+            echo -ne "\r"
+        # elif [[ "$line" == "Initializing download: "* ]]
+        # then echo "axel is now downloading $(cut -d ':' -f '2' <<< "$line")"
+        elif [[ "$line" == "["*"%] "*" ["*"KB/s]"* ]] || [[ "$line" == *"."*"["*"KB/s]"* ]]
+        then :
+        elif [[ "$line" == '' ]]
+        then :
+        else $quiet || echo "axel: $line"
+        fi
+    done
+}
+tput cnorm
+echo ''
