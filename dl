@@ -14,7 +14,8 @@ function syntax {
         "-q      : dont show axel output except progress bar\n"\
         "        : (if you dont want the progress bar, call axel, not me.)\n"\
         "-a opts : pass arguments directly to axel.\n"\
-        "-o file : saves output to file"
+        "-o file : saves output to file\n"\
+        "-H      : show axel help page"
     exit "$exit"
 }
 
