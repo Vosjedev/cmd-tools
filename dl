@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for dep in axel cut bc bash tput
+for dep in axel cut bc bash tput unbuffer
 do command -v "$dep" >/dev/null 2>&1 || { echo "dependency $dep not found. please make the command available in the PATH by installing it/changing the path/moving the binary to a place in the path."; exit 255; }
 done
 
@@ -15,18 +15,25 @@ function syntax {
         "        : (if you dont want the progress bar, call axel, not me.)\n"\
         "-a opts : pass arguments directly to axel.\n"\
         "-o file : saves output to file\n"\
-        "-H      : show axel help page"
+        "-H      : show axel help page\n"\
+        "-i      : show download speed"\
+        "-d      : use axels download bar but filter out extra lines (auto-uses -q) (disabled)"
+
     exit "$exit"
 }
 
+default=false
 quiet=false
-while getopts ":Hhqa:o:" arg;do
+info=false
+while getopts ":Hhqa:o:id" arg;do
     case $arg in
         h ) syntax 0;;
         q ) quiet=true;;
         a ) opts="$OPTARG";;
         o ) outfile="-o '$OPTARG'";;
         H ) axel --help; exit 0;;
+        d ) default=true; quiet=true ;;
+        i ) info=true;;
         * ) syntax 1
     esac
 done
@@ -45,32 +52,49 @@ fi
 
 tput civis
 opts="${opts[*]}"
-eval "( axel $opts $outfile $url; )" | {
+eval "axel $opts $outfile $url" 2>&1 | {
     while read -r line; do
         pers="$(echo "$line" | cut -d ']' -f '1' -s | cut -c '3-4')"
         # echo "$line:::$pers"
         #[[ "$line" == "[  0%] "*" ["*"KB/s]"* ]] && pers="0"
         pers="${pers// /}"
-        if [[ "$pers" =~ ^[0-9]+$ ]]
+        if [[ "$pers" =~ ^[0-9]+$ ]] && ! $default
         then [[ "$pers" == 00 ]] && pers=100
-            cols=$(($(tput cols)-6))
-            echo -n "$pers% "
-            ch="$(echo "$(($cols))*($pers/100)" | bc -l | cut -d . -f 1)"
+            dispers="[$pers%] "
+            cols=$(($(tput cols)-${#dispers}-2))
+            $info && {
+                infoline="$(echo "$line" | cut -d '[' -f '3,4' -s)"
+                # infoline="${infoline// /}"
+                infoline=" [${infoline}"
+                cols=$((cols-${#infoline}))
+            }
+            # eval "printf ' %.0s' {1..$(($(tput cols)-1))}" && echo -ne '\r'
+            # echo -n "$dispers"
+            out="$dispers"
+            ch="$(echo "$((cols*(pers/100)))" | bc -l | cut -d . -f 1)"
             # echo "$cols="
             # echo "$ch-"
             # echo "$(($cols-$ch-1))"
-            eval "printf '#%.0s' {1..$ch}"
-            eval "printf '=%.0s' {1..$(($cols-$ch))}"
+            # out="$out$(eval "printf '\e[0;32m#%.0s\e[0m' {1..$ch}")"
+            out="$out$(eval "printf '#%.0s' {1..$ch}")"
+            out="$out$(eval "printf '=%.0s' {1..$(($cols-$ch))}")"
+            # $info && echo -n "$infoline"
+            $info && out="$out$infoline"
+            echo -ne "${out}"
+            # eval "printf '*%.0s' {1..$(($(tput cols)-${#out}-1))}"
             echo -ne "\r"
         # elif [[ "$line" == "Initializing download: "* ]]
         # then echo "axel is now downloading $(cut -d ':' -f '2' <<< "$line")"
         elif [[ "$line" == "["*"%] "*" ["*"KB/s]"* ]] || [[ "$line" == *"."*"["*"KB/s]"* ]]
-        then :
+        then
+            if $default
+            then echo -ne "\r$line"
+            fi
         elif [[ "$line" == '' ]]
         then :
-        else $quiet || echo "axel: $line"
+        else $quiet || { eval "printf ' %.0s' {1..$(($(tput cols)-1))}"; echo -e "\raxel: $line" ;}
         fi
     done
-}
+} 
 tput cnorm
 echo ''
