@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for dep in axel cut bc bash tput unbuffer
+for dep in axel cut bc bash tput
 do command -v "$dep" >/dev/null 2>&1 || { echo "dependency $dep not found. please make the command available in the PATH by installing it/changing the path/moving the binary to a place in the path."; exit 255; }
 done
 
