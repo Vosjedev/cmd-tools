@@ -71,7 +71,7 @@ eval "axel $opts $outfile $url" 2>&1 | {
             # eval "printf ' %.0s' {1..$(($(tput cols)-1))}" && echo -ne '\r'
             # echo -n "$dispers"
             out="$dispers"
-            ch="$(echo "$((cols*(pers/100)))" | bc -l | cut -d . -f 1)"
+            ch="$(echo "$cols*($pers/100)" | bc -l | cut -d . -f 1)"
             # echo "$cols="
             # echo "$ch-"
             # echo "$(($cols-$ch-1))"
